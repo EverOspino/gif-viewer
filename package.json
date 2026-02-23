@@ -1,0 +1,97 @@
+{
+  "name": "gif-viewer",
+  "displayName": "GIF Viewer",
+  "description": "Brighten up your VS Code sidebar with animated GIFs — manual, random, or auto-changing",
+  "version": "1.0.0",
+  "publisher": "everOs",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gifViewer.setGif",
+        "title": "GIF Viewer: Change GIF"
+      },
+      {
+        "command": "gifViewer.randomGif",
+        "title": "GIF Viewer: Random GIF"
+      },
+      {
+        "command": "gifViewer.toggleAutoChange",
+        "title": "GIF Viewer: Toggle Auto Change"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "gifViewer.gifView",
+          "name": "GIF Viewer"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "GIF Viewer",
+      "properties": {
+        "gifViewer.gifUrl": {
+          "type": "string",
+          "default": "",
+          "description": "URL of the GIF to display"
+        },
+        "gifViewer.width": {
+          "type": "string",
+          "default": "100%",
+          "description": "GIF width (e.g. 100%, 200px, 300px)"
+        },
+        "gifViewer.height": {
+          "type": "string",
+          "default": "150px",
+          "description": "GIF height (e.g. 150px, 200px, auto)"
+        },
+        "gifViewer.mode": {
+          "type": "string",
+          "enum": ["manual", "random", "auto"],
+          "default": "manual",
+          "enumDescriptions": [
+            "Fixed URL entered manually",
+            "Random GIF loaded via button",
+            "Automatic GIF change on a timer"
+          ],
+          "description": "GIF display mode"
+        },
+        "gifViewer.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Klipy API Key (get one for free at https://klipy.com/migrate)"
+        },
+        "gifViewer.searchTag": {
+          "type": "string",
+          "default": "celebration",
+          "description": "Tag/category for random GIF search (e.g. coding, funny, cat)"
+        },
+        "gifViewer.autoChangeInterval": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "description": "Auto change interval in seconds (auto mode only)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
