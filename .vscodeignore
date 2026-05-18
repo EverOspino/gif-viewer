@@ -9,3 +9,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 node_modules/**
+.claude/**
+gifviewer/**
+install.sh
+icon.svg
+secrets.example.*
