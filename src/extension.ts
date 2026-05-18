@@ -13,13 +13,15 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     private _width: string = '100%';
     private _height: string = '150px';
     private _gifService: GifService;
+    private _context: vscode.ExtensionContext;
     private _autoChangeTimer?: NodeJS.Timeout;
     private _isAutoMode: boolean = false;
 
-    constructor(extensionUri: vscode.Uri) {
+    constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
+        this._context = context;
         this._gifService = new GifService();
-        this._currentGif = this._getGif();
+        this._currentGif = context.globalState.get<string>('lastGifUrl') || this._getGif();
         this._loadSize();
         this._checkAndStartAutoMode();
     }
@@ -90,6 +92,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
 
     public setGif(url: string) {
         this._currentGif = url;
+        this._context.globalState.update('lastGifUrl', url);
         if (this._view) {
             this._view.webview.postMessage({ type: 'setGif', gifUrl: url });
         }
@@ -422,7 +425,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    gifViewProvider = new GifViewProvider(context.extensionUri);
+    gifViewProvider = new GifViewProvider(context.extensionUri, context);
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
