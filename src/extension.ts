@@ -10,8 +10,6 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _extensionUri: vscode.Uri;
     private _currentGif: string = '';
-    private _width: string = '100%';
-    private _height: string = '150px';
     private _gifService: GifService;
     private _context: vscode.ExtensionContext;
     private _autoChangeTimer?: NodeJS.Timeout;
@@ -22,7 +20,6 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         this._context = context;
         this._gifService = new GifService();
         this._currentGif = context.globalState.get<string>('lastGifUrl') || this._getGif();
-        this._loadSize();
         this._checkAndStartAutoMode();
     }
 
@@ -57,6 +54,12 @@ class GifViewProvider implements vscode.WebviewViewProvider {
                 case 'toggleAuto':
                     await this.toggleAutoChange();
                     break;
+                case 'searchGif':
+                    await this.searchGifs(message.query, message.page || 1);
+                    break;
+                case 'selectGif':
+                    this.setGif(message.url);
+                    break;
             }
         });
 
@@ -71,12 +74,6 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     private _getGif(): string {
         const config = vscode.workspace.getConfiguration('gifViewer');
         return config.get<string>('gifUrl') || DEFAULT_GIF;
-    }
-
-    private _loadSize(): void {
-        const config = vscode.workspace.getConfiguration('gifViewer');
-        this._width = config.get<string>('width') || '100%';
-        this._height = config.get<string>('height') || '150px';
     }
 
     private _checkAndStartAutoMode(): void {
@@ -95,14 +92,6 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         this._context.globalState.update('lastGifUrl', url);
         if (this._view) {
             this._view.webview.postMessage({ type: 'setGif', gifUrl: url });
-        }
-    }
-
-    public updateSize(width: string, height: string) {
-        this._width = width;
-        this._height = height;
-        if (this._view) {
-            this._view.webview.postMessage({ type: 'setSize', width, height });
         }
     }
 
@@ -127,6 +116,36 @@ class GifViewProvider implements vscode.WebviewViewProvider {
                 this._view.webview.postMessage({ type: 'loading', isLoading: false });
             }
             vscode.window.showErrorMessage(`Failed to load random GIF: ${error}`);
+        }
+    }
+
+    public async searchGifs(query: string, page: number): Promise<void> {
+        try {
+            const config = vscode.workspace.getConfiguration('gifViewer');
+            const apiKey = config.get<string>('apiKey') || '';
+            const perPage = config.get<number>('resultsPerPage') || 12;
+
+            if (this._view) {
+                this._view.webview.postMessage({ type: 'searchLoading', isLoading: true });
+            }
+
+            const result = await this._gifService.searchGifs(query, page, perPage, apiKey);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'searchResults',
+                    gifs: result.gifs,
+                    page: result.page,
+                    hasNext: result.hasNext,
+                    query
+                });
+                this._view.webview.postMessage({ type: 'searchLoading', isLoading: false });
+            }
+        } catch (error) {
+            if (this._view) {
+                this._view.webview.postMessage({ type: 'searchLoading', isLoading: false });
+                this._view.webview.postMessage({ type: 'searchError', message: `${error}` });
+            }
         }
     }
 
@@ -181,10 +200,6 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         const config = vscode.workspace.getConfiguration('gifViewer');
         const mode = config.get<string>('mode') || 'manual';
 
-        this._loadSize();
-
-        // Only update to manual GIF when in manual mode
-        // In random/auto mode, keep the current GIF
         if (mode === 'manual') {
             this._currentGif = this._getGif();
         }
@@ -201,14 +216,6 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // Send size update
-        this._view.webview.postMessage({
-            type: 'setSize',
-            width: this._width,
-            height: this._height
-        });
-
-        // Only update GIF if in manual mode
         const config = vscode.workspace.getConfiguration('gifViewer');
         const mode = config.get<string>('mode') || 'manual';
 
@@ -247,16 +254,65 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             height: 100vh;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
             background: transparent;
             overflow: hidden;
             font-family: var(--vscode-font-family);
         }
 
+        .search-bar {
+            width: 100%;
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            background: var(--vscode-sideBar-background);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .search-bar input {
+            flex: 1;
+            padding: 4px 8px;
+            background: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            color: var(--vscode-input-foreground);
+            border-radius: 3px;
+            font-size: 12px;
+            font-family: var(--vscode-font-family);
+            outline: none;
+        }
+
+        .search-bar input:focus {
+            border-color: var(--vscode-focusBorder);
+        }
+
+        .search-bar input::placeholder {
+            color: var(--vscode-input-placeholderForeground);
+        }
+
+        .search-bar .clear-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--vscode-descriptionForeground);
+            cursor: pointer;
+            padding: 2px 4px;
+            font-size: 14px;
+            border-radius: 3px;
+        }
+
+        .search-bar .clear-btn:hover {
+            color: var(--vscode-foreground);
+            background: var(--vscode-toolbar-hoverBackground);
+        }
+
+        .search-bar .clear-btn.visible {
+            display: flex;
+        }
+
         .gif-container {
             width: 100%;
             flex: 1;
+            min-height: 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -265,12 +321,17 @@ class GifViewProvider implements vscode.WebviewViewProvider {
 
         .gif-wrapper {
             width: 100%;
+            height: 100%;
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
         }
 
         .gif-wrapper img {
-            width: ${this._width};
-            height: ${this._height};
+            width: 100%;
+            max-height: 100%;
             object-fit: contain;
             display: block;
             transition: opacity 0.3s ease;
@@ -342,12 +403,103 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             border: 1px solid var(--vscode-inputOption-activeBorder);
         }
 
+        .controls button.cooldown {
+            opacity: 0.5;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+
         .controls button .codicon {
             font-size: 14px;
+        }
+
+        .results-container {
+            width: 100%;
+            flex-shrink: 0;
+            max-height: 40vh;
+            overflow-y: auto;
+            border-top: 1px solid var(--vscode-panel-border);
+            background: var(--vscode-sideBar-background);
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            padding: 8px;
+        }
+
+        .result-thumb {
+            aspect-ratio: 1;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.2s ease, opacity 0.2s ease;
+        }
+
+        .result-thumb:hover {
+            border-color: var(--vscode-focusBorder);
+        }
+
+        .result-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .load-more-btn {
+            width: 100%;
+            padding: 6px;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: var(--vscode-font-family);
+            text-align: center;
+        }
+
+        .load-more-btn:hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+
+        .search-status {
+            padding: 8px;
+            text-align: center;
+            color: var(--vscode-descriptionForeground);
+            font-size: 11px;
+        }
+
+        .search-loading {
+            display: none;
+            padding: 12px;
+            text-align: center;
+            color: var(--vscode-descriptionForeground);
+            font-size: 11px;
+        }
+
+        .search-loading.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .search-loading .codicon {
+            animation: spin 1s linear infinite;
         }
     </style>
 </head>
 <body>
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search GIFs..." />
+        <button class="clear-btn" id="clearBtn" title="Clear search">
+            <i class="codicon codicon-close"></i>
+        </button>
+    </div>
+
     <div class="gif-container">
         <div class="gif-wrapper">
             <img id="gif" src="${this._currentGif}" alt="GIF" />
@@ -369,20 +521,90 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         </button>
     </div>
 
+    <div class="results-container" id="resultsContainer" style="display: none;">
+        <div class="search-loading" id="searchLoading">
+            <i class="codicon codicon-sync"></i>
+            <span>Searching...</span>
+        </div>
+        <div class="results-grid" id="resultsGrid"></div>
+        <div class="search-status" id="searchStatus"></div>
+        <button class="load-more-btn" id="loadMoreBtn" style="display: none;">Load more</button>
+    </div>
+
     <script>
         const vscode = acquireVsCodeApi();
         const gifElement = document.getElementById('gif');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const randomBtn = document.getElementById('randomBtn');
         const autoBtn = document.getElementById('autoBtn');
+        const searchInput = document.getElementById('searchInput');
+        const clearBtn = document.getElementById('clearBtn');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const searchLoading = document.getElementById('searchLoading');
+        const searchStatus = document.getElementById('searchStatus');
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+
+        let currentSearchQuery = '';
+        let currentSearchPage = 1;
+        let debounceTimer = null;
+
+        function clearSearch() {
+            searchInput.value = '';
+            clearBtn.classList.remove('visible');
+            resultsContainer.style.display = 'none';
+            resultsGrid.innerHTML = '';
+            searchStatus.textContent = '';
+            loadMoreBtn.style.display = 'none';
+            currentSearchQuery = '';
+            currentSearchPage = 1;
+        }
+
+        searchInput.addEventListener('input', () => {
+            clearBtn.classList.toggle('visible', searchInput.value.length > 0);
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const query = searchInput.value.trim();
+                if (query.length === 0) {
+                    clearSearch();
+                    return;
+                }
+                currentSearchQuery = query;
+                currentSearchPage = 1;
+                vscode.postMessage({ type: 'searchGif', query, page: 1 });
+            }, 500);
+        });
+
+        clearBtn.addEventListener('click', () => {
+            clearSearch();
+            searchInput.focus();
+        });
+
+        loadMoreBtn.addEventListener('click', () => {
+            currentSearchPage++;
+            vscode.postMessage({ type: 'searchGif', query: currentSearchQuery, page: currentSearchPage });
+        });
+
+        function setCooldown(btn, ms) {
+            btn.classList.add('cooldown');
+            setTimeout(() => btn.classList.remove('cooldown'), ms);
+        }
 
         randomBtn?.addEventListener('click', () => {
+            if (randomBtn.classList.contains('cooldown')) return;
+            setCooldown(randomBtn, 3000);
             vscode.postMessage({ type: 'randomGif' });
         });
 
         autoBtn?.addEventListener('click', () => {
+            if (autoBtn.classList.contains('cooldown')) return;
+            setCooldown(autoBtn, 3000);
             vscode.postMessage({ type: 'toggleAuto' });
         });
+
+        function selectGif(url) {
+            vscode.postMessage({ type: 'selectGif', url });
+        }
 
         window.addEventListener('message', event => {
             const message = event.data;
@@ -390,11 +612,6 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             switch (message.type) {
                 case 'setGif':
                     gifElement.src = message.gifUrl;
-                    break;
-
-                case 'setSize':
-                    gifElement.style.width = message.width;
-                    gifElement.style.height = message.height;
                     break;
 
                 case 'loading':
@@ -415,6 +632,51 @@ class GifViewProvider implements vscode.WebviewViewProvider {
                         autoBtn.classList.remove('active');
                         autoBtn.innerHTML = '<i class="codicon codicon-play"></i> Auto';
                     }
+                    break;
+
+                case 'searchLoading':
+                    if (message.isLoading) {
+                        resultsContainer.style.display = 'block';
+                        searchLoading.classList.add('active');
+                        if (currentSearchPage === 1) {
+                            resultsGrid.innerHTML = '';
+                            searchStatus.textContent = '';
+                            loadMoreBtn.style.display = 'none';
+                        }
+                    } else {
+                        searchLoading.classList.remove('active');
+                    }
+                    break;
+
+                case 'searchResults':
+                    resultsContainer.style.display = 'block';
+                    if (currentSearchPage === 1) {
+                        resultsGrid.innerHTML = '';
+                    }
+                    if (message.gifs.length === 0 && currentSearchPage === 1) {
+                        searchStatus.textContent = 'No results found';
+                        loadMoreBtn.style.display = 'none';
+                    } else {
+                        message.gifs.forEach(gif => {
+                            const thumb = document.createElement('div');
+                            thumb.className = 'result-thumb';
+                            thumb.title = gif.title || '';
+                            thumb.onclick = () => selectGif(gif.url);
+                            const img = document.createElement('img');
+                            img.src = gif.thumbnail || gif.url;
+                            img.alt = gif.title || '';
+                            img.loading = 'lazy';
+                            thumb.appendChild(img);
+                            resultsGrid.appendChild(thumb);
+                        });
+                        searchStatus.textContent = '';
+                        loadMoreBtn.style.display = message.hasNext ? 'block' : 'none';
+                    }
+                    break;
+
+                case 'searchError':
+                    searchStatus.textContent = message.message || 'Search failed';
+                    loadMoreBtn.style.display = 'none';
                     break;
             }
         });
@@ -463,9 +725,23 @@ export function activate(context: vscode.ExtensionContext) {
         await gifViewProvider.toggleAutoChange();
     });
 
+    // Command: Search GIF
+    const searchGifCommand = vscode.commands.registerCommand('gifViewer.searchGif', async () => {
+        const query = await vscode.window.showInputBox({
+            prompt: 'Search for GIFs',
+            placeHolder: 'e.g. cat, celebration, coding'
+        });
+
+        if (query) {
+            await gifViewProvider.searchGifs(query, 1);
+            await vscode.commands.executeCommand('gifViewer.gifView.focus');
+        }
+    });
+
     context.subscriptions.push(setGifCommand);
     context.subscriptions.push(randomGifCommand);
     context.subscriptions.push(toggleAutoCommand);
+    context.subscriptions.push(searchGifCommand);
 
     // Watch for configuration changes
     context.subscriptions.push(

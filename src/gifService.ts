@@ -3,7 +3,14 @@ import { KLIPY_APP_KEY } from './secrets';
 
 export interface GifApiResponse {
     url: string;
+    thumbnail?: string;
     title?: string;
+}
+
+export interface GifSearchResult {
+    gifs: GifApiResponse[];
+    page: number;
+    hasNext: boolean;
 }
 
 interface KlipyGifFile {
@@ -134,6 +141,40 @@ export class GifService {
     /**
      * Checks whether a GIF URL is reachable
      */
+    async searchGifs(query: string, page: number, perPage: number, apiKey?: string): Promise<GifSearchResult> {
+        const appKey = apiKey || KLIPY_APP_KEY;
+
+        try {
+            const url = `${GifService.KLIPY_BASE_URL}/api/v1/${appKey}/gifs/search?customer_id=${this.customerId}&q=${encodeURIComponent(query)}&per_page=${perPage}&page=${page}`;
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Klipy API error: ${response.status}`);
+            }
+
+            const data = await response.json() as KlipyResponse;
+
+            if (!data.result || !data.data.data || data.data.data.length === 0) {
+                return { gifs: [], page, hasNext: false };
+            }
+
+            const gifs = data.data.data.map(gif => ({
+                url: gif.file.md.gif.url,
+                thumbnail: gif.file.sm.gif.url,
+                title: gif.title || 'GIF'
+            }));
+
+            return {
+                gifs,
+                page: data.data.current_page,
+                hasNext: data.data.has_next
+            };
+        } catch (error) {
+            console.error('Error searching GIFs from Klipy:', error);
+            throw new Error(`Failed to search GIFs from Klipy: ${error}`);
+        }
+    }
+
     async validateGifUrl(url: string): Promise<boolean> {
         try {
             const response = await fetch(url, { method: 'HEAD' });

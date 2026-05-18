@@ -2,7 +2,7 @@
   "name": "gif-viewer",
   "displayName": "GIF Viewer",
   "description": "Brighten up your VS Code sidebar with animated GIFs — manual, random, or auto-changing",
-  "version": "1.2.0",
+  "version": "1.3.1",
   "publisher": "gifviewer",
   "icon": "icon.png",
   "engines": {
@@ -28,6 +28,10 @@
       {
         "command": "gifViewer.toggleAutoChange",
         "title": "GIF Viewer: Toggle Auto Change"
+      },
+      {
+        "command": "gifViewer.searchGif",
+        "title": "GIF Viewer: Search GIF"
       }
     ],
     "views": {
@@ -46,16 +50,6 @@
           "type": "string",
           "default": "",
           "description": "URL of the GIF to display"
-        },
-        "gifViewer.width": {
-          "type": "string",
-          "default": "100%",
-          "description": "GIF width (e.g. 100%, 200px, 300px)"
-        },
-        "gifViewer.height": {
-          "type": "string",
-          "default": "150px",
-          "description": "GIF height (e.g. 150px, 200px, auto)"
         },
         "gifViewer.mode": {
           "type": "string",
@@ -87,6 +81,13 @@
           "default": 60,
           "minimum": 60,
           "description": "Auto change interval in seconds (auto mode only, minimum: 60)"
+        },
+        "gifViewer.resultsPerPage": {
+          "type": "number",
+          "default": 12,
+          "minimum": 6,
+          "maximum": 50,
+          "description": "Number of search results per page"
         }
       }
     }

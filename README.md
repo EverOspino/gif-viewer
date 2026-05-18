@@ -72,11 +72,10 @@ Open Settings (`Ctrl+,`) and search for **GIF Viewer**, or edit `settings.json` 
 |---------|------|---------|-------------|
 | `gifViewer.mode` | string | `"manual"` | Display mode: `manual`, `random`, or `auto` |
 | `gifViewer.gifUrl` | string | `""` | GIF URL (manual mode) |
-| `gifViewer.width` | string | `"100%"` | GIF width (e.g. `100%`, `250px`) |
-| `gifViewer.height` | string | `"150px"` | GIF height (e.g. `150px`, `auto`) |
 | `gifViewer.apiKey` | string | `""` | Klipy API Key (optional — a default key is included) |
 | `gifViewer.searchTag` | string | `"celebration"` | Tag used to search GIFs |
 | `gifViewer.autoChangeInterval` | number | `60` | Seconds between changes (auto mode, min: 60) |
+| `gifViewer.resultsPerPage` | number | `12` | Number of search results per page |
 
 ### Popular tags to try
 
