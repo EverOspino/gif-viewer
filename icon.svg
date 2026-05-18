@@ -1,49 +1,15 @@
-<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background gradient circle -->
-  <defs>
-    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-    </linearGradient>
-    <linearGradient id="play-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#f59e0b;stop-opacity:1" />
-    </linearGradient>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="62" fill="#1a1a2e"/>
 
-  <!-- Main circle background -->
-  <circle cx="64" cy="64" r="58" fill="url(#bg-gradient)"/>
+  <!-- Left loop (goes under at crossing) -->
+  <path d="M 22,64 C 22,28 48,28 64,64 C 48,100 22,100 22,64"
+        fill="none" stroke="white" stroke-width="13" stroke-linecap="round"/>
 
-  <!-- Film frame effect -->
-  <rect x="30" y="35" width="68" height="58" rx="4" fill="white" opacity="0.95"/>
+  <!-- Right loop (goes over at crossing) -->
+  <path d="M 64,64 C 80,28 106,28 106,64 C 106,100 80,100 64,64"
+        fill="none" stroke="white" stroke-width="13" stroke-linecap="round"/>
 
-  <!-- GIF text stylized -->
-  <text x="64" y="70" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="url(#play-gradient)" text-anchor="middle">GIF</text>
-
-  <!-- Play icon overlay (small triangle) -->
-  <path d="M 75 40 L 75 35 L 82 37.5 Z" fill="#667eea" opacity="0.8"/>
-
-  <!-- Decorative dots (animation indication) -->
-  <circle cx="38" cy="42" r="2.5" fill="#667eea"/>
-  <circle cx="46" cy="42" r="2.5" fill="#667eea" opacity="0.7"/>
-  <circle cx="54" cy="42" r="2.5" fill="#667eea" opacity="0.4"/>
-
-  <!-- Film strip perforations -->
-  <rect x="32" y="38" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="32" y="45" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="32" y="52" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="32" y="59" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="32" y="66" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="32" y="73" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="32" y="80" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="32" y="87" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-
-  <rect x="93" y="38" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="93" y="45" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="93" y="52" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="93" y="59" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="93" y="66" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="93" y="73" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="93" y="80" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
-  <rect x="93" y="87" width="3" height="3" rx="0.5" fill="#667eea" opacity="0.3"/>
+  <!-- Play button in right loop -->
+  <polygon points="80,50 80,78 100,64" fill="#FF6D00"/>
 </svg>
