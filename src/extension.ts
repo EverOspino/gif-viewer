@@ -133,7 +133,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         }
 
         const config = vscode.workspace.getConfiguration('gifViewer');
-        const interval = config.get<number>('autoChangeInterval') || 30;
+        const interval = config.get<number>('autoChangeInterval') || 60;
 
         this._isAutoMode = true;
 

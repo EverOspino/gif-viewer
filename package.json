@@ -2,14 +2,18 @@
   "name": "gif-viewer",
   "displayName": "GIF Viewer",
   "description": "Brighten up your VS Code sidebar with animated GIFs — manual, random, or auto-changing",
-  "version": "1.0.0",
-  "publisher": "everOs",
+  "version": "1.1.1",
+  "publisher": "gifviewer",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.74.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -55,7 +59,11 @@
         },
         "gifViewer.mode": {
           "type": "string",
-          "enum": ["manual", "random", "auto"],
+          "enum": [
+            "manual",
+            "random",
+            "auto"
+          ],
           "default": "manual",
           "enumDescriptions": [
             "Fixed URL entered manually",
@@ -76,9 +84,9 @@
         },
         "gifViewer.autoChangeInterval": {
           "type": "number",
-          "default": 30,
-          "minimum": 5,
-          "description": "Auto change interval in seconds (auto mode only)"
+          "default": 60,
+          "minimum": 60,
+          "description": "Auto change interval in seconds (auto mode only, minimum: 60)"
         }
       }
     }
@@ -94,8 +102,9 @@
     "url": "https://github.com/EverOspino/gif-viewer.git"
   },
   "devDependencies": {
-    "@types/vscode": "^1.74.0",
     "@types/node": "^18.0.0",
+    "@types/vscode": "^1.74.0",
     "typescript": "^5.0.0"
-  }
+  },
+  "license": "LICENSE.txt"
 }
