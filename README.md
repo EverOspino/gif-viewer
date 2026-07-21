@@ -2,7 +2,7 @@
 
 **Bring your VS Code sidebar to life with animated GIFs.** Pick a favorite, grab a random one, or let them cycle automatically while you code.
 
-![Demo](https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif)
+![Demo](https://raw.githubusercontent.com/EverOspino/gif-viewer/master/preview.gif)
 
 ---
 
@@ -12,11 +12,6 @@
 2. Go to the Extensions panel (`Ctrl+Shift+X`)
 3. Search for **GIF Viewer**
 4. Click **Install**
-
-Or from the terminal:
-```
-code --install-extension gif-viewer-1.1.0.vsix
-```
 
 After installing, the GIF panel appears in the **Explorer sidebar** at the bottom. Look for the **"GIF Viewer"** section.
 

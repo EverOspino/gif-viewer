@@ -2,7 +2,7 @@
   "name": "gif-viewer",
   "displayName": "GIF Viewer",
   "description": "Brighten up your VS Code sidebar with animated GIFs — manual, random, or auto-changing",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "publisher": "gifviewer",
   "icon": "icon.png",
   "engines": {
