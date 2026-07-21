@@ -108,7 +108,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     public async loadRandomGif(): Promise<void> {
         try {
             const config = vscode.workspace.getConfiguration('gifViewer');
-            const searchTag = config.get<string>('searchTag') || 'celebration';
+            const searchTag = config.get<string>('searchTag') || '';
             const apiKey = config.get<string>('apiKey') || '';
 
             if (this._view) {
@@ -243,8 +243,6 @@ class GifViewProvider implements vscode.WebviewViewProvider {
 
     private _getHtmlContent(): string {
         const config = vscode.workspace.getConfiguration('gifViewer');
-        const mode = config.get<string>('mode') || 'manual';
-        const showControls = mode !== 'manual';
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -396,7 +394,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         .controls {
             width: 100%;
             padding: 8px;
-            display: ${showControls ? 'flex' : 'none'};
+            display: flex;
             gap: 8px;
             justify-content: center;
             background: var(--vscode-sideBar-background);

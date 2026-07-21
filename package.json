@@ -73,8 +73,8 @@
         },
         "gifViewer.searchTag": {
           "type": "string",
-          "default": "celebration",
-          "description": "Tag/category for random GIF search (e.g. coding, funny, cat)"
+          "default": "",
+          "description": "Tag/category for random GIF search (e.g. coding, funny, cat). Leave empty to use trending."
         },
         "gifViewer.autoChangeInterval": {
           "type": "number",
