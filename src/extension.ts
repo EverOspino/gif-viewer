@@ -60,6 +60,16 @@ class GifViewProvider implements vscode.WebviewViewProvider {
                 case 'selectGif':
                     this.setGif(message.url);
                     break;
+                case 'copyGifUrl':
+                    await vscode.env.clipboard.writeText(message.url);
+                    vscode.window.showInformationMessage('GIF URL copied to clipboard');
+                    break;
+                case 'openSettings':
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'gifViewer');
+                    break;
+                case 'openExternal':
+                    vscode.env.openExternal(vscode.Uri.parse(message.url));
+                    break;
             }
         });
 
@@ -309,6 +319,23 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             display: flex;
         }
 
+        .search-bar .icon-btn {
+            background: none;
+            border: none;
+            color: var(--vscode-descriptionForeground);
+            cursor: pointer;
+            padding: 2px 4px;
+            font-size: 14px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-bar .icon-btn:hover {
+            color: var(--vscode-foreground);
+            background: var(--vscode-toolbar-hoverBackground);
+        }
+
         .gif-container {
             width: 100%;
             flex: 1;
@@ -335,6 +362,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             object-fit: contain;
             display: block;
             transition: opacity 0.3s ease;
+            cursor: pointer;
         }
 
         .gif-wrapper img.loading {
@@ -490,19 +518,41 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         .search-loading .codicon {
             animation: spin 1s linear infinite;
         }
+
+        .search-powered-by {
+            padding: 4px 8px;
+            text-align: center;
+            color: var(--vscode-descriptionForeground);
+            font-size: 10px;
+            border-top: 1px solid var(--vscode-panel-border);
+        }
+
+        .search-powered-by a {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .search-powered-by a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search GIFs..." />
+        <input type="text" id="searchInput" placeholder="Search KLIPY..." />
         <button class="clear-btn" id="clearBtn" title="Clear search">
             <i class="codicon codicon-close"></i>
+        </button>
+        <button class="icon-btn" id="settingsBtn" title="Extension settings">
+            <i class="codicon codicon-settings-gear"></i>
         </button>
     </div>
 
     <div class="gif-container">
         <div class="gif-wrapper">
-            <img id="gif" src="${this._currentGif}" alt="GIF" />
+            <img id="gif" src="${this._currentGif}" alt="GIF" title="Click to copy URL to clipboard" />
             <div class="loading-indicator" id="loadingIndicator">
                 <i class="codicon codicon-sync"></i>
                 <span>Loading...</span>
@@ -529,6 +579,9 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         <div class="results-grid" id="resultsGrid"></div>
         <div class="search-status" id="searchStatus"></div>
         <button class="load-more-btn" id="loadMoreBtn" style="display: none;">Load more</button>
+        <div class="search-powered-by">
+            Powered by <a id="klipyLink">KLIPY</a>
+        </div>
     </div>
 
     <script>
@@ -539,6 +592,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         const autoBtn = document.getElementById('autoBtn');
         const searchInput = document.getElementById('searchInput');
         const clearBtn = document.getElementById('clearBtn');
+        const settingsBtn = document.getElementById('settingsBtn');
         const resultsContainer = document.getElementById('resultsContainer');
         const resultsGrid = document.getElementById('resultsGrid');
         const searchLoading = document.getElementById('searchLoading');
@@ -580,6 +634,15 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             searchInput.focus();
         });
 
+        settingsBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'openSettings' });
+        });
+
+        document.getElementById('klipyLink')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            vscode.postMessage({ type: 'openExternal', url: 'https://klipy.com' });
+        });
+
         loadMoreBtn.addEventListener('click', () => {
             currentSearchPage++;
             vscode.postMessage({ type: 'searchGif', query: currentSearchQuery, page: currentSearchPage });
@@ -605,6 +668,10 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         function selectGif(url) {
             vscode.postMessage({ type: 'selectGif', url });
         }
+
+        gifElement.addEventListener('click', () => {
+            vscode.postMessage({ type: 'copyGifUrl', url: gifElement.src });
+        });
 
         window.addEventListener('message', event => {
             const message = event.data;
