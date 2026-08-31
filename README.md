@@ -1,6 +1,6 @@
 # GIF Viewer
 
-**Bring your VS Code sidebar to life with animated GIFs.** Pick a favorite, grab a random one, or let them cycle automatically while you code.
+**Bring your editor sidebar to life with animated GIFs.** Pick a favorite, grab a random one, or let them cycle automatically while you code. Works in VS Code and other [Open VSX](https://open-vsx.org/)-compatible editors (VSCodium, Cursor, Gitpod, and similar).
 
 ![Demo](https://raw.githubusercontent.com/EverOspino/gif-viewer/master/preview.gif)
 
@@ -8,24 +8,27 @@
 
 ## Installation
 
-1. Open VS Code
+1. Open VS Code, VSCodium, Cursor, or another compatible editor
 2. Go to the Extensions panel (`Ctrl+Shift+X`)
 3. Search for **GIF Viewer**
 4. Click **Install**
+
+Also available on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=gifviewer.gif-viewer) and [Open VSX Registry](https://open-vsx.org/extension/gifviewer/gif-viewer).
 
 After installing, the GIF panel appears in the **Explorer sidebar** at the bottom. Look for the **"GIF Viewer"** section.
 
 ---
 
-## Modes
+## Features
 
-| Mode | How it works |
-|------|-------------|
-| **Manual** | Display a fixed GIF from any public URL |
-| **Random** | Click a button to load a new random GIF |
-| **Auto** | GIFs cycle automatically on a timer |
+- **Manual GIF** — display any GIF from a public URL
+- **Random** — load a new random GIF or sticker with a click
+- **Auto** — cycle automatically on a timer (the toggle is remembered between sessions)
+- **GIFs + stickers** — Random, Auto, and Search mix both by default (change under Settings → GIF Viewer → Content Type)
+- **Search** — find the perfect GIF or sticker via the built-in search, powered by [KLIPY](https://klipy.com)
+- **Copy / paste** — right-click the panel to copy a public URL or paste a URL from anywhere (not just KLIPY). Paste needs internet; the image is downloaded so it can display in the sidebar.
 
-Random and Auto modes work **out of the box** — no configuration needed. A default API key is included.
+Random and Auto work **out of the box** — no configuration needed. A default API key is included.
 
 ---
 
@@ -34,42 +37,48 @@ Random and Auto modes work **out of the box** — no configuration needed. A def
 **Manual** — paste any GIF URL (`Ctrl+Shift+P` → **GIF Viewer: Change GIF**):
 ```json
 {
-    "gifViewer.mode": "manual",
     "gifViewer.gifUrl": "https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif"
 }
 ```
 
-**Random** — just switch the mode and press the Random button in the sidebar panel:
+**Random** — press the **Random** button in the sidebar panel. Optionally narrow the results with a tag:
 ```json
 {
-    "gifViewer.mode": "random",
     "gifViewer.searchTag": "coding"
 }
 ```
 
-**Auto** — GIFs change on their own every 60 seconds:
+**Auto** — press the **Auto** button in the sidebar. Items cycle every 60 seconds (configurable) and the toggle persists across sessions:
 ```json
 {
-    "gifViewer.mode": "auto",
-    "gifViewer.searchTag": "celebration"
+    "gifViewer.autoChangeInterval": 120
 }
 ```
 
-> Tip: You can also change the GIF at any time via `Ctrl+Shift+P` → **GIF Viewer: Change GIF**
+**Content type** — GIFs, stickers, or both (`all`, the default):
+```json
+{
+    "gifViewer.contentType": "all"
+}
+```
+
+**Paste** — copy any GIF URL (Giphy, Tenor, etc.) and right-click the panel → **Paste**. Requires internet. Right-click → **Copy URL** only works for public URLs (KLIPY results and manual `gifUrl`), not for pasted files.
+
+> Tip: Hover the panel to reveal the search bar and buttons. The gear next to the search bar opens GIF Viewer settings. You can also change the GIF via `Ctrl+Shift+P` → **GIF Viewer: Change GIF** or **GIF Viewer: Paste GIF**.
 
 ---
 
 ## Configuration
 
-Open Settings (`Ctrl+,`) and search for **GIF Viewer**, or edit `settings.json` directly:
+Open Settings (`Ctrl+,`) and search for **GIF Viewer**, click the gear next to the panel search bar, or edit `settings.json` directly:
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `gifViewer.mode` | string | `"manual"` | Display mode: `manual`, `random`, or `auto` |
-| `gifViewer.gifUrl` | string | `""` | GIF URL (manual mode) |
+| `gifViewer.gifUrl` | string | `""` | URL of the GIF to display |
 | `gifViewer.apiKey` | string | `""` | Klipy API Key (optional — a default key is included) |
-| `gifViewer.searchTag` | string | `"celebration"` | Tag used to search GIFs |
-| `gifViewer.autoChangeInterval` | number | `60` | Seconds between changes (auto mode, min: 60) |
+| `gifViewer.contentType` | `all` / `gifs` / `stickers` | `all` | Content for Random, Auto, and Search |
+| `gifViewer.searchTag` | string | `""` | Tag for Random/Auto (leave empty to use trending) |
+| `gifViewer.autoChangeInterval` | number | `60` | Seconds between changes in Auto (min: 60) |
 | `gifViewer.resultsPerPage` | number | `12` | Number of search results per page |
 
 ### Popular tags to try
@@ -83,16 +92,21 @@ Open Settings (`Ctrl+,`) and search for **GIF Viewer**, or edit `settings.json` 
 **GIF not showing**
 - Make sure the Explorer sidebar is open (`Ctrl+Shift+E`)
 - Scroll down to find the **GIF Viewer** panel
-- In manual mode, check that the URL is publicly accessible
-- Try reloading VS Code: `Ctrl+Shift+P` → **Reload Window**
+- If using a manual URL, check that it is publicly accessible
+- Try reloading the window: `Ctrl+Shift+P` → **Reload Window**
 
 **Random/Auto fails to load**
 - Verify your internet connection
-- Try a broader tag like `cat` or leave it empty to use trending GIFs
+- Try a broader tag like `cat` or leave it empty to use trending
 - Open the Developer Tools console (`Help → Toggle Developer Tools`) for error messages
 
+**Paste does nothing / image does not show**
+- You need an internet connection; the extension downloads the image
+- The clipboard must contain an `http`/`https` URL (right-click → **Paste**, or **GIF Viewer: Paste GIF**)
+- Page links (e.g. a Giphy/Tenor page) are resolved to the actual image when possible
+
 **Buttons not visible**
-- The Random and Auto buttons only appear in `random` and `auto` modes
+- Hover over the GIF Viewer panel to reveal the search bar and the Random/Auto buttons. They auto-hide when the pointer leaves the panel for a cleaner view.
 
 ---
 
