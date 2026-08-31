@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
-import { GifService } from './gifService';
-
-const DEFAULT_GIF = 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif';
+import { ContentType, GifService } from './gifService';
 
 let gifViewProvider: GifViewProvider;
 
@@ -10,6 +8,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _extensionUri: vscode.Uri;
     private _currentGif: string = '';
+    private _configuredGifUrl: string = '';
     private _gifService: GifService;
     private _context: vscode.ExtensionContext;
     private _autoChangeTimer?: NodeJS.Timeout;
@@ -18,9 +17,21 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
         this._context = context;
-        this._gifService = new GifService();
-        this._currentGif = context.globalState.get<string>('lastGifUrl') || this._getGif();
-        this._checkAndStartAutoMode();
+        this._gifService = new GifService({
+            getRecent: () => context.globalState.get<string[]>('recentGifUrls') ?? [],
+            setRecent: (urls) => { void context.globalState.update('recentGifUrls', urls); },
+            getCustomerId: () => context.globalState.get<string>('klipyCustomerId'),
+            setCustomerId: (id) => { void context.globalState.update('klipyCustomerId', id); }
+        });
+        this._configuredGifUrl = this._getGif();
+        if (this._configuredGifUrl) {
+            this._currentGif = this._configuredGifUrl;
+        } else {
+            this._currentGif = context.globalState.get<string>('lastGifUrl') || '';
+        }
+        if (context.globalState.get<boolean>('autoEnabled')) {
+            this.startAutoChange();
+        }
     }
 
     public resolveWebviewView(
@@ -32,16 +43,8 @@ class GifViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [this._extensionUri]
+            localResourceRoots: [this._extensionUri, this._context.globalStorageUri]
         };
-
-        // Only reset to manual GIF if in manual mode and no GIF is loaded yet
-        const config = vscode.workspace.getConfiguration('gifViewer');
-        const mode = config.get<string>('mode') || 'manual';
-
-        if (mode === 'manual' && !this._currentGif) {
-            this._currentGif = this._getGif();
-        }
 
         webviewView.webview.html = this._getHtmlContent();
 
@@ -61,8 +64,15 @@ class GifViewProvider implements vscode.WebviewViewProvider {
                     this.setGif(message.url);
                     break;
                 case 'copyGifUrl':
+                    if (!message.url) {
+                        this.showInfo('This GIF has no public URL');
+                        break;
+                    }
                     await vscode.env.clipboard.writeText(message.url);
-                    vscode.window.showInformationMessage('GIF URL copied to clipboard');
+                    this.showInfo('GIF URL copied to clipboard');
+                    break;
+                case 'pasteRequest':
+                    await this.pasteFromMenu();
                     break;
                 case 'openSettings':
                     vscode.commands.executeCommand('workbench.action.openSettings', 'gifViewer');
@@ -73,36 +83,245 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             }
         });
 
-        // When the view becomes visible again, check the current mode
+        // When the view becomes visible again, re-sync the GIF
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) {
-                this._checkAndStartAutoMode();
+                this._updateWebviewContent();
             }
         });
     }
 
-    private _getGif(): string {
-        const config = vscode.workspace.getConfiguration('gifViewer');
-        return config.get<string>('gifUrl') || DEFAULT_GIF;
+    private showInfo(message: string) {
+        vscode.window.setStatusBarMessage(message, 5000);
     }
 
-    private _checkAndStartAutoMode(): void {
+    private _getGif(): string {
         const config = vscode.workspace.getConfiguration('gifViewer');
-        const mode = config.get<string>('mode') || 'manual';
+        return config.get<string>('gifUrl') || '';
+    }
 
-        if (mode === 'auto') {
-            this.startAutoChange();
-        } else {
-            this.stopAutoChange();
+    private _getContentType(): ContentType {
+        const raw = vscode.workspace.getConfiguration('gifViewer').get<string>('contentType') || 'all';
+        if (raw === 'gifs' || raw === 'stickers' || raw === 'all') {
+            return raw;
+        }
+        return 'all';
+    }
+
+    private static readonly LOCAL_PREFIX = 'local-media:';
+    private static readonly MAX_PASTE_BYTES = 12 * 1024 * 1024;
+    private static readonly MAX_PASTED_FILES = 20;
+    private static readonly FETCH_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/gif,image/*,text/html;q=0.8,*/*;q=0.5'
+    };
+
+    private pastedDir(): vscode.Uri {
+        return vscode.Uri.joinPath(this._context.globalStorageUri, 'pasted');
+    }
+
+    private toDisplayUrl(stored: string): string {
+        if (!stored.startsWith(GifViewProvider.LOCAL_PREFIX) || !this._view) {
+            return stored;
+        }
+        const name = stored.slice(GifViewProvider.LOCAL_PREFIX.length);
+        if (!name || name.includes('/') || name.includes('\\') || name.includes('..')) {
+            return '';
+        }
+        const file = vscode.Uri.joinPath(this.pastedDir(), name);
+        return this._view.webview.asWebviewUri(file).toString();
+    }
+
+    private toCopyUrl(stored: string): string {
+        return stored.startsWith('http://') || stored.startsWith('https://') ? stored : '';
+    }
+
+    private cleanUrl(url: string): string {
+        return url.trim().replace(/[),.;]+$/, '');
+    }
+
+    private parseHttpUrl(text: string): string | undefined {
+        const raw = (text || '').trim();
+        if (!raw) {
+            return undefined;
+        }
+        const imgSrc = raw.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
+        if (imgSrc) {
+            return this.cleanUrl(imgSrc[1]);
+        }
+        const match = raw.match(/https?:\/\/[^\s<>"']+/);
+        if (match) {
+            return this.cleanUrl(match[0]);
+        }
+        const first = raw.replace(/\r/g, '').split('\n').map(line => line.trim()).find(line => line && !line.startsWith('#'));
+        if (!first) {
+            return undefined;
+        }
+        try {
+            const uri = vscode.Uri.parse(first);
+            if (uri.scheme === 'http' || uri.scheme === 'https') {
+                return first;
+            }
+        } catch {
+            return undefined;
+        }
+        return undefined;
+    }
+
+    private extractImageFromHtml(html: string): string | undefined {
+        const og = html.match(/<meta[^>]+property=["']og:image:url["'][^>]+content=["']([^"']+)["']/i)
+            || html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+            || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+            || html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+        if (og?.[1]) {
+            return this.cleanUrl(og[1]);
+        }
+        const img = html.match(/<img[^>]+src=["'](https?:\/\/[^"']+\.(?:gif|webp|png|jpe?g)[^"']*)["']/i);
+        if (img?.[1]) {
+            return this.cleanUrl(img[1]);
+        }
+        return undefined;
+    }
+
+    private mimeToExt(mime: string): string | undefined {
+        if (mime === 'image/gif') {
+            return 'gif';
+        }
+        if (mime === 'image/png') {
+            return 'png';
+        }
+        if (mime === 'image/webp') {
+            return 'webp';
+        }
+        if (mime === 'image/jpeg' || mime === 'image/jpg') {
+            return 'jpg';
+        }
+        return undefined;
+    }
+
+    private sniffExt(buf: Uint8Array): string | undefined {
+        if (buf.length >= 6 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
+            return 'gif';
+        }
+        if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) {
+            return 'png';
+        }
+        if (buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46) {
+            return 'webp';
+        }
+        if (buf.length >= 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) {
+            return 'jpg';
+        }
+        return undefined;
+    }
+
+    private async fetchAsImage(url: string, depth = 0): Promise<{ mime: string; buf: Uint8Array } | undefined> {
+        if (depth > 2) {
+            return undefined;
+        }
+        const res = await fetch(url, { redirect: 'follow', headers: GifViewProvider.FETCH_HEADERS });
+        if (!res.ok) {
+            return undefined;
+        }
+        const ct = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+        const imageExt = /\.(gif|webp|png|jpe?g)(\?|$)/i.test(url);
+        if (ct.startsWith('image/') && ct !== 'image/svg+xml') {
+            const buf = new Uint8Array(await res.arrayBuffer());
+            return { mime: ct, buf };
+        }
+        if (ct === 'application/octet-stream' && imageExt) {
+            const buf = new Uint8Array(await res.arrayBuffer());
+            return { mime: 'image/gif', buf };
+        }
+        if (ct.includes('html')) {
+            const html = (await res.text()).slice(0, 1_000_000);
+            const next = this.extractImageFromHtml(html);
+            if (next && next !== url) {
+                return this.fetchAsImage(next, depth + 1);
+            }
+        }
+        return undefined;
+    }
+
+    private async savePastedImage(mime: string, buf: Uint8Array): Promise<string | undefined> {
+        const ext = this.sniffExt(buf) || this.mimeToExt(mime);
+        if (!ext) {
+            vscode.window.showErrorMessage('Could not load an image from that URL');
+            return undefined;
+        }
+        if (buf.length > GifViewProvider.MAX_PASTE_BYTES) {
+            vscode.window.showErrorMessage('Pasted image is too large (max 12 MB)');
+            return undefined;
+        }
+        await vscode.workspace.fs.createDirectory(this.pastedDir());
+        const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(this.pastedDir(), name), buf);
+        await this.prunePastedFiles();
+        return `${GifViewProvider.LOCAL_PREFIX}${name}`;
+    }
+
+    private async prunePastedFiles(): Promise<void> {
+        try {
+            const dir = this.pastedDir();
+            const entries = await vscode.workspace.fs.readDirectory(dir);
+            const files = entries
+                .filter(([, type]) => type === vscode.FileType.File)
+                .map(([name]) => name)
+                .sort();
+            const extra = files.length - GifViewProvider.MAX_PASTED_FILES;
+            if (extra <= 0) {
+                return;
+            }
+            for (const name of files.slice(0, extra)) {
+                await vscode.workspace.fs.delete(vscode.Uri.joinPath(dir, name));
+            }
+        } catch {
+            return;
         }
     }
 
     public setGif(url: string) {
         this._currentGif = url;
         this._context.globalState.update('lastGifUrl', url);
-        if (this._view) {
-            this._view.webview.postMessage({ type: 'setGif', gifUrl: url });
+        this._updateWebviewContent();
+    }
+
+    public async pasteText(text: string): Promise<void> {
+        const url = this.parseHttpUrl(text || '');
+        if (!url) {
+            vscode.window.showErrorMessage('Clipboard does not contain a GIF URL');
+            return;
         }
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'loading', isLoading: true });
+        }
+        try {
+            const image = await this.fetchAsImage(url);
+            if (!image) {
+                vscode.window.showErrorMessage('Could not load an image from that URL');
+                return;
+            }
+            const stored = await this.savePastedImage(image.mime, image.buf);
+            if (stored) {
+                this.setGif(stored);
+            }
+        } catch {
+            vscode.window.showErrorMessage('Could not load an image from that URL');
+        } finally {
+            if (this._view) {
+                this._view.webview.postMessage({ type: 'loading', isLoading: false });
+            }
+        }
+    }
+
+    public async pasteFromClipboardText(): Promise<void> {
+        const text = await vscode.env.clipboard.readText();
+        await this.pasteText(text);
+    }
+
+    public async pasteFromMenu(): Promise<void> {
+        const text = await vscode.env.clipboard.readText();
+        await this.pasteText(text);
     }
 
     public async loadRandomGif(): Promise<void> {
@@ -115,7 +334,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
                 this._view.webview.postMessage({ type: 'loading', isLoading: true });
             }
 
-            const gifData = await this._gifService.getRandomGif(searchTag, apiKey);
+            const gifData = await this._gifService.getRandomGif(searchTag, apiKey, this._getContentType());
             this.setGif(gifData.url);
 
             if (this._view) {
@@ -133,13 +352,13 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         try {
             const config = vscode.workspace.getConfiguration('gifViewer');
             const apiKey = config.get<string>('apiKey') || '';
-            const perPage = config.get<number>('resultsPerPage') || 12;
+            const perPage = Math.min(50, Math.max(6, config.get<number>('resultsPerPage') || 12));
 
             if (this._view) {
                 this._view.webview.postMessage({ type: 'searchLoading', isLoading: true });
             }
 
-            const result = await this._gifService.searchGifs(query, page, perPage, apiKey);
+            const result = await this._gifService.searchGifs(query, page, perPage, apiKey, this._getContentType());
 
             if (this._view) {
                 this._view.webview.postMessage({
@@ -168,6 +387,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         const interval = config.get<number>('autoChangeInterval') || 60;
 
         this._isAutoMode = true;
+        this._context.globalState.update('autoEnabled', true);
 
         // Load first GIF immediately
         this.loadRandomGif();
@@ -181,7 +401,7 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             this._view.webview.postMessage({ type: 'autoModeStatus', isActive: true });
         }
 
-        vscode.window.showInformationMessage(`Auto change enabled (every ${interval}s)`);
+        this.showInfo(`Auto change enabled (every ${interval}s)`);
     }
 
     public stopAutoChange(): void {
@@ -189,12 +409,13 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             clearInterval(this._autoChangeTimer);
             this._autoChangeTimer = undefined;
             this._isAutoMode = false;
+            this._context.globalState.update('autoEnabled', false);
 
             if (this._view) {
                 this._view.webview.postMessage({ type: 'autoModeStatus', isActive: false });
             }
 
-            vscode.window.showInformationMessage('Auto change disabled');
+            this.showInfo('Auto change disabled');
         }
     }
 
@@ -207,14 +428,14 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     }
 
     public refresh() {
-        const config = vscode.workspace.getConfiguration('gifViewer');
-        const mode = config.get<string>('mode') || 'manual';
-
-        if (mode === 'manual') {
-            this._currentGif = this._getGif();
+        const gifUrl = this._getGif();
+        if (gifUrl !== this._configuredGifUrl) {
+            this._configuredGifUrl = gifUrl;
+            if (gifUrl) {
+                this.setGif(gifUrl);
+            }
+            // When cleared, keep the currently displayed GIF
         }
-
-        this._checkAndStartAutoMode();
 
         if (this._view) {
             this._updateWebviewContent();
@@ -225,16 +446,11 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         if (!this._view) {
             return;
         }
-
-        const config = vscode.workspace.getConfiguration('gifViewer');
-        const mode = config.get<string>('mode') || 'manual';
-
-        if (mode === 'manual') {
-            this._view.webview.postMessage({
-                type: 'setGif',
-                gifUrl: this._currentGif
-            });
-        }
+        this._view.webview.postMessage({
+            type: 'setGif',
+            gifUrl: this.toDisplayUrl(this._currentGif),
+            copyUrl: this.toCopyUrl(this._currentGif)
+        });
     }
 
     public dispose() {
@@ -242,7 +458,8 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlContent(): string {
-        const config = vscode.workspace.getConfiguration('gifViewer');
+        const displayGif = this.toDisplayUrl(this._currentGif);
+        const initialCopyUrl = this.toCopyUrl(this._currentGif);
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -275,6 +492,19 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             display: flex;
             align-items: center;
             gap: 4px;
+            overflow: hidden;
+            max-height: 100px;
+            transition: max-height 0.25s ease, opacity 0.25s ease,
+                padding 0.25s ease, border-bottom-width 0.25s ease;
+        }
+
+        body:not(.hover) .search-bar {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            opacity: 0;
+            border-bottom-width: 0;
+            pointer-events: none;
         }
 
         .search-bar input {
@@ -342,12 +572,28 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             align-items: center;
             justify-content: center;
             position: relative;
+            overflow: hidden;
+            background: var(--vscode-sideBar-background);
+        }
+
+        .gif-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: blur(45px) brightness(0.55) saturate(1.3);
+            transform: scale(1.25);
+            z-index: 0;
+            pointer-events: none;
         }
 
         .gif-wrapper {
             width: 100%;
             height: 100%;
             position: relative;
+            z-index: 1;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -360,11 +606,30 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             object-fit: contain;
             display: block;
             transition: opacity 0.3s ease;
-            cursor: pointer;
         }
 
         .gif-wrapper img.loading {
             opacity: 0.5;
+        }
+
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            color: var(--vscode-descriptionForeground);
+            font-size: 12px;
+            text-align: center;
+            padding: 0 16px;
+        }
+
+        .empty-state .codicon {
+            font-size: 28px;
+            opacity: 0.6;
         }
 
         .loading-indicator {
@@ -399,6 +664,19 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             justify-content: center;
             background: var(--vscode-sideBar-background);
             border-top: 1px solid var(--vscode-panel-border);
+            overflow: hidden;
+            max-height: 100px;
+            transition: max-height 0.25s ease, opacity 0.25s ease,
+                padding 0.25s ease, border-top-width 0.25s ease;
+        }
+
+        body:not(.hover) .controls {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            opacity: 0;
+            border-top-width: 0;
+            pointer-events: none;
         }
 
         .controls button {
@@ -535,6 +813,47 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         .search-powered-by a:hover {
             text-decoration: underline;
         }
+
+        .ctx-menu {
+            position: fixed;
+            z-index: 1000;
+            display: none;
+            min-width: 140px;
+            padding: 4px 0;
+            background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+            color: var(--vscode-menu-foreground, var(--vscode-foreground));
+            border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+            font-size: 12px;
+            font-family: var(--vscode-font-family);
+        }
+
+        .ctx-menu.visible {
+            display: block;
+        }
+
+        .ctx-menu button {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            color: inherit;
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+        }
+
+        .ctx-menu button:hover:not(:disabled) {
+            background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+            color: var(--vscode-menu-selectionForeground, var(--vscode-foreground));
+        }
+
+        .ctx-menu button:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
     </style>
 </head>
 <body>
@@ -549,8 +868,13 @@ class GifViewProvider implements vscode.WebviewViewProvider {
     </div>
 
     <div class="gif-container">
+        <img id="gifBackground" class="gif-background" src="${displayGif}"${displayGif ? '' : ' style="display: none;"'} />
         <div class="gif-wrapper">
-            <img id="gif" src="${this._currentGif}" alt="GIF" title="Click to copy URL to clipboard" />
+            <img id="gif" src="${displayGif}" alt="GIF"${displayGif ? '' : ' style="display: none;"'} />
+            <div class="empty-state" id="emptyState"${displayGif ? ' style="display: none;"' : ''}>
+                <i class="codicon codicon-image"></i>
+                <span>No GIF set. Add a URL in the extension settings.</span>
+            </div>
             <div class="loading-indicator" id="loadingIndicator">
                 <i class="codicon codicon-sync"></i>
                 <span>Loading...</span>
@@ -582,10 +906,17 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         </div>
     </div>
 
+    <div class="ctx-menu" id="ctxMenu">
+        <button type="button" id="ctxCopy">Copy URL</button>
+        <button type="button" id="ctxPaste">Paste</button>
+    </div>
+
     <script>
         const vscode = acquireVsCodeApi();
         const gifElement = document.getElementById('gif');
+        const gifBackground = document.getElementById('gifBackground');
         const loadingIndicator = document.getElementById('loadingIndicator');
+        const emptyState = document.getElementById('emptyState');
         const randomBtn = document.getElementById('randomBtn');
         const autoBtn = document.getElementById('autoBtn');
         const searchInput = document.getElementById('searchInput');
@@ -596,10 +927,14 @@ class GifViewProvider implements vscode.WebviewViewProvider {
         const searchLoading = document.getElementById('searchLoading');
         const searchStatus = document.getElementById('searchStatus');
         const loadMoreBtn = document.getElementById('loadMoreBtn');
+        const ctxMenu = document.getElementById('ctxMenu');
+        const ctxCopy = document.getElementById('ctxCopy');
+        const ctxPaste = document.getElementById('ctxPaste');
 
         let currentSearchQuery = '';
         let currentSearchPage = 1;
         let debounceTimer = null;
+        let copyUrl = ${JSON.stringify(initialCopyUrl)};
 
         function clearSearch() {
             searchInput.value = '';
@@ -667,8 +1002,62 @@ class GifViewProvider implements vscode.WebviewViewProvider {
             vscode.postMessage({ type: 'selectGif', url });
         }
 
-        gifElement.addEventListener('click', () => {
-            vscode.postMessage({ type: 'copyGifUrl', url: gifElement.src });
+        function hideCtxMenu() {
+            ctxMenu.classList.remove('visible');
+        }
+
+        function showCtxMenu(x, y) {
+            ctxCopy.disabled = !copyUrl;
+            ctxMenu.classList.add('visible');
+            ctxMenu.style.left = x + 'px';
+            ctxMenu.style.top = y + 'px';
+            const rect = ctxMenu.getBoundingClientRect();
+            const maxX = window.innerWidth - rect.width - 4;
+            const maxY = window.innerHeight - rect.height - 4;
+            ctxMenu.style.left = Math.max(4, Math.min(x, maxX)) + 'px';
+            ctxMenu.style.top = Math.max(4, Math.min(y, maxY)) + 'px';
+        }
+
+        document.addEventListener('contextmenu', (e) => {
+            if (e.target === searchInput) {
+                return;
+            }
+            e.preventDefault();
+            showCtxMenu(e.clientX, e.clientY);
+        });
+
+        document.addEventListener('click', hideCtxMenu);
+        document.addEventListener('scroll', hideCtxMenu, true);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideCtxMenu();
+            }
+        });
+
+        ctxCopy.addEventListener('click', (e) => {
+            e.stopPropagation();
+            hideCtxMenu();
+            vscode.postMessage({ type: 'copyGifUrl', url: copyUrl });
+        });
+
+        ctxPaste.addEventListener('click', (e) => {
+            e.stopPropagation();
+            hideCtxMenu();
+            vscode.postMessage({ type: 'pasteRequest' });
+        });
+
+        function isSearchActive() {
+            return searchInput.value.trim() !== '' ||
+                resultsContainer.style.display !== 'none';
+        }
+
+        document.body.addEventListener('mouseenter', () => {
+            document.body.classList.add('hover');
+        });
+        document.body.addEventListener('mouseleave', () => {
+            if (!isSearchActive()) {
+                document.body.classList.remove('hover');
+            }
         });
 
         window.addEventListener('message', event => {
@@ -676,7 +1065,18 @@ class GifViewProvider implements vscode.WebviewViewProvider {
 
             switch (message.type) {
                 case 'setGif':
-                    gifElement.src = message.gifUrl;
+                    copyUrl = message.copyUrl || '';
+                    if (message.gifUrl) {
+                        gifElement.src = message.gifUrl;
+                        gifElement.style.display = '';
+                        gifBackground.src = message.gifUrl;
+                        gifBackground.style.display = '';
+                        emptyState.style.display = 'none';
+                    } else {
+                        gifElement.style.display = 'none';
+                        gifBackground.style.display = 'none';
+                        emptyState.style.display = 'flex';
+                    }
                     break;
 
                 case 'loading':
@@ -806,13 +1206,26 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(setGifCommand);
     context.subscriptions.push(randomGifCommand);
     context.subscriptions.push(toggleAutoCommand);
-    context.subscriptions.push(searchGifCommand);
+    const pasteGifCommand = vscode.commands.registerCommand('gifViewer.pasteGif', async () => {
+        await gifViewProvider.pasteFromClipboardText();
+    });
 
-    // Watch for configuration changes
+    context.subscriptions.push(searchGifCommand);
+    context.subscriptions.push(pasteGifCommand);
+
+    // Watch for configuration changes (debounced so editing a URL
+    // keystroke-by-keystroke doesn't trigger intermediate loads)
+    let refreshTimer: NodeJS.Timeout | undefined;
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('gifViewer')) {
-                gifViewProvider.refresh();
+                if (refreshTimer) {
+                    clearTimeout(refreshTimer);
+                }
+                refreshTimer = setTimeout(() => {
+                    refreshTimer = undefined;
+                    gifViewProvider.refresh();
+                }, 800);
             }
         })
     );

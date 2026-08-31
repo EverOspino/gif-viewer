@@ -2,7 +2,7 @@
   "name": "gif-viewer",
   "displayName": "GIF Viewer",
   "description": "Brighten up your VS Code sidebar with animated GIFs — manual, random, or auto-changing",
-  "version": "1.4.1",
+  "version": "1.8.0",
   "publisher": "gifviewer",
   "icon": "icon.png",
   "engines": {
@@ -32,6 +32,10 @@
       {
         "command": "gifViewer.searchGif",
         "title": "GIF Viewer: Search GIF"
+      },
+      {
+        "command": "gifViewer.pasteGif",
+        "title": "GIF Viewer: Paste GIF"
       }
     ],
     "views": {
@@ -51,25 +55,25 @@
           "default": "",
           "description": "URL of the GIF to display"
         },
-        "gifViewer.mode": {
-          "type": "string",
-          "enum": [
-            "manual",
-            "random",
-            "auto"
-          ],
-          "default": "manual",
-          "enumDescriptions": [
-            "Fixed URL entered manually",
-            "Random GIF loaded via button",
-            "Automatic GIF change on a timer"
-          ],
-          "description": "GIF display mode"
-        },
         "gifViewer.apiKey": {
           "type": "string",
           "default": "",
           "description": "Klipy API Key (get one for free at https://klipy.com/migrate)"
+        },
+        "gifViewer.contentType": {
+          "type": "string",
+          "enum": [
+            "all",
+            "gifs",
+            "stickers"
+          ],
+          "enumDescriptions": [
+            "GIFs and stickers mixed",
+            "GIFs only",
+            "Stickers only"
+          ],
+          "default": "all",
+          "description": "Content used for Random, Auto, and Search"
         },
         "gifViewer.searchTag": {
           "type": "string",
@@ -80,7 +84,7 @@
           "type": "number",
           "default": 60,
           "minimum": 60,
-          "description": "Auto change interval in seconds (auto mode only, minimum: 60)"
+          "description": "Auto change interval in seconds (minimum: 60)"
         },
         "gifViewer.resultsPerPage": {
           "type": "number",
