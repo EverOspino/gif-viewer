@@ -14,5 +14,5 @@ gifviewer/**
 install.sh
 icon.svg
 secrets.example.*
-PLAN-*.md
+docs/**
 preview.gif
