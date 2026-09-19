@@ -241,17 +241,35 @@ export class GifService {
         return gif;
     }
 
-    private async dealRandom(tag: string, apiKey: string | undefined, contentType: ContentType): Promise<GifApiResponse> {
+    private splitSearchTags(tag: string): string[] {
+        return tag.split(',').map(part => part.trim()).filter(part => part.length > 0);
+    }
+
+    private async dealRandomQuery(query: string, apiKey: string | undefined, contentType: ContentType): Promise<GifApiResponse> {
         if (contentType === 'gifs' || contentType === 'stickers') {
-            return this.dealRandomFromKind(tag, apiKey, contentType);
+            return this.dealRandomFromKind(query, apiKey, contentType);
         }
         const kind: MediaKind = Math.random() < 0.5 ? 'gifs' : 'stickers';
         try {
-            return await this.dealRandomFromKind(tag, apiKey, kind);
+            return await this.dealRandomFromKind(query, apiKey, kind);
         } catch {
             const fallback: MediaKind = kind === 'gifs' ? 'stickers' : 'gifs';
-            return this.dealRandomFromKind(tag, apiKey, fallback);
+            return this.dealRandomFromKind(query, apiKey, fallback);
         }
+    }
+
+    private async dealRandom(tag: string, apiKey: string | undefined, contentType: ContentType): Promise<GifApiResponse> {
+        const tags = this.splitSearchTags(tag);
+        const queries = tags.length > 0 ? this.shuffle([...tags]) : [''];
+        let lastError: unknown;
+        for (const query of queries) {
+            try {
+                return await this.dealRandomQuery(query, apiKey, contentType);
+            } catch (error) {
+                lastError = error;
+            }
+        }
+        throw lastError instanceof Error ? lastError : new Error('No results found from Klipy');
     }
 
     async getRandomGif(tag: string, apiKey?: string, contentType: ContentType = 'all'): Promise<GifApiResponse> {

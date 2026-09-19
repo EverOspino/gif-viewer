@@ -2,7 +2,7 @@
   "name": "gif-viewer",
   "displayName": "GIF Viewer",
   "description": "Brighten up your VS Code sidebar with animated GIFs — manual, random, or auto-changing",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "publisher": "gifviewer",
   "icon": "icon.png",
   "engines": {
@@ -78,7 +78,7 @@
         "gifViewer.searchTag": {
           "type": "string",
           "default": "",
-          "description": "Tag/category for random GIF search (e.g. coding, funny, cat). Leave empty to use trending."
+          "description": "Tag(s) for Random/Auto. Separate multiple tags with commas (e.g. coding, funny, cat). Leave empty to use trending."
         },
         "gifViewer.autoChangeInterval": {
           "type": "number",

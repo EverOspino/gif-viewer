@@ -41,10 +41,10 @@ Random and Auto work **out of the box** — no configuration needed. A default A
 }
 ```
 
-**Random** — press the **Random** button in the sidebar panel. Optionally narrow the results with a tag:
+**Random** — press the **Random** button in the sidebar panel. Optionally narrow the results with one tag or several (comma-separated; one is picked at random each time):
 ```json
 {
-    "gifViewer.searchTag": "coding"
+    "gifViewer.searchTag": "coding, funny, cat"
 }
 ```
 
@@ -77,7 +77,7 @@ Open Settings (`Ctrl+,`) and search for **GIF Viewer**, click the gear next to t
 | `gifViewer.gifUrl` | string | `""` | URL of the GIF to display |
 | `gifViewer.apiKey` | string | `""` | Klipy API Key (optional — a default key is included) |
 | `gifViewer.contentType` | `all` / `gifs` / `stickers` | `all` | Content for Random, Auto, and Search |
-| `gifViewer.searchTag` | string | `""` | Tag for Random/Auto (leave empty to use trending) |
+| `gifViewer.searchTag` | string | `""` | Tag(s) for Random/Auto, comma-separated (leave empty to use trending) |
 | `gifViewer.autoChangeInterval` | number | `60` | Seconds between changes in Auto (min: 60) |
 | `gifViewer.resultsPerPage` | number | `12` | Number of search results per page |
 
